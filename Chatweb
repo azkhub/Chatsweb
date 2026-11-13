@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1020">
+<title>Share Script Chat</title>
+<style>
+  :root { --bg:#0f1020; --panel:#171830; --card:#20223f; --text:#eef0ff; --muted:#8b8fb3; --accent:#7c83fd; --accent2:#a78bfa; --err:#ff7b86; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #1d1f4a 0%, var(--bg) 60%); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px)); background: rgba(23,24,48,.85); backdrop-filter: blur(8px); border-bottom: 1px solid #2a2c55; }
+  .title { font-weight: 800; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+  .dot.off { background: var(--err); box-shadow: 0 0 8px var(--err); }
+  #me { background: var(--card); color: var(--text); border: 1px solid #34376b; border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+  #list { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+  .row { display: flex; gap: 8px; align-items: flex-end; max-width: 88%; }
+  .row.me { align-self: flex-end; flex-direction: row-reverse; }
+  .av { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; }
+  .bubble { background: var(--card); padding: 8px 12px 6px; border-radius: 16px 16px 16px 4px; min-width: 70px; word-break: break-word; white-space: pre-wrap; line-height: 1.35; }
+  .row.me .bubble { background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 16px 16px 4px 16px; color: #fff; }
+  .name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .row.me .name { display: none; }
+  .time { display: block; text-align: right; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .row.me .time { color: #e6e7ff; }
+  .empty { margin: auto; color: var(--muted); text-align: center; }
+  #toast { min-height: 20px; padding: 0 14px 4px; color: var(--err); font-size: 13px; }
+  form { display: flex; gap: 8px; padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid #2a2c55; }
+  .field { flex: 1; position: relative; }
+  #msg { width: 100%; padding: 13px 44px 13px 14px; border-radius: 14px; border: 1px solid #34376b; background: var(--card); color: var(--text); font-size: 16px; outline: none; }
+  #msg:focus { border-color: var(--accent); }
+  #cnt { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); pointer-events: none; }
+  #btn { min-width: 76px; border: 0; border-radius: 14px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+  #btn:disabled { opacity: .55; cursor: not-allowed; }
+  #down { position: fixed; right: 16px; bottom: 90px; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font-size: 13px; display: none; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  #ov { position: fixed; inset: 0; background: rgba(8,8,20,.85); display: none; place-items: center; z-index: 10; padding: 20px; }
+  #ov .box { background: var(--panel); border: 1px solid #34376b; border-radius: 18px; padding: 20px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
+  #ov h3 { margin: 0; }
+  #un { padding: 12px; border-radius: 12px; border: 1px solid #34376b; background: var(--card); color: var(--text); font-size: 16px; outline: none; }
+  #ok { padding: 12px; border: 0; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 16px; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <div class="title"><span class="dot" id="dot"></span>📜 Share Script Chat</div>
+  <button id="me" type="button">@...</button>
+</header>
+<div id="ov"><div class="box"><h3>Pilih username</h3><input id="un" maxlength="20" placeholder="contoh: azkhub"><button id="ok" type="button">Mulai</button></div></div>
+<div id="list"><div class="empty">Memuat chat…</div></div>
+<button id="down" type="button">⬇ Pesan baru</button>
+<div id="toast"></div>
+<form id="f" autocomplete="off">
+  <div class="field">
+    <input id="msg" placeholder="Tulis pesan…" maxlength="300">
+    <span id="cnt">0/300</span>
+  </div>
+  <button id="btn" type="submit">Kirim</button>
+</form>
+
+<script>
+const SUPABASE_URL = "https://gtntmadknqaslqzizvqt.supabase.co";
+const SUPABASE_KEY = "sb_publishable_G0A0O_OP_K2rMgRSayUKgw__csYYCvU";
+const TABLE = "pesan";
+const COOLDOWN = 3; // detik, samakan dengan trigger SQL
+
+const API = SUPABASE_URL + "/rest/v1/" + TABLE;
+const H = { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" };
+const $ = id => document.getElementById(id);
+const list = $("list"), toast = $("toast"), input = $("msg"), btn = $("btn"), down = $("down");
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+let username = "";
+function askName(force) {
+  const saved = force ? "" : (store.get("chat_username") || "");
+  if (saved.trim()) { setName(saved); return; }
+  $("ov").style.display = "grid"; $("un").value = ""; $("un").focus();
+}
+function setName(n) {
+  username = n.trim().slice(0, 20);
+  store.set("chat_username", username);
+  $("me").textContent = "@" + username;
+  $("ov").style.display = "none";
+  lastKey = ""; if (rowsCache) render(rowsCache);
+}
+$("ok").onclick = () => { if ($("un").value.trim()) setName($("un").value); };
+$("un").addEventListener("keydown", e => { if (e.key === "Enter") $("ok").click(); });
+$("me").onclick = () => askName(true);
+
+const COLORS = ["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#3b82f6","#8b5cf6","#ec4899"];
+function colorOf(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; }
+function fmt(t) { const d = new Date(t); return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(".", ":"); }
+function nearBottom() { return list.scrollHeight - list.scrollTop - list.clientHeight < 120; }
+function toBottom() { list.scrollTop = list.scrollHeight; down.style.display = "none"; }
+down.onclick = toBottom;
+list.addEventListener("scroll", () => { if (nearBottom()) down.style.display = "none"; });
+
+let lastKey = "", first = true, rowsCache = null;
+function setOnline(ok, why) {
+  $("dot").classList.toggle("off", !ok);
+  if (!ok && first) list.innerHTML = '<div class="empty">Gagal memuat chat.<br>' + (why || "Cek tabel dan key Supabase.") + '</div>';
+}
+function render(rows) {
+  rowsCache = rows;
+  const key = rows.length ? rows[rows.length - 1].id + ":" + rows.length + ":" + username : "0:" + username;
+  if (key === lastKey) return;
+  lastKey = key;
+  const stick = first || nearBottom();
+  list.innerHTML = "";
+  if (!rows.length) list.innerHTML = '<div class="empty">Belum ada pesan.<br>Jadi yang pertama! 👋</div>';
+  rows.forEach(m => {
+    const mine = m.username === username;
+    const row = document.createElement("div"); row.className = "row" + (mine ? " me" : "");
+    const av = document.createElement("div"); av.className = "av"; av.style.background = colorOf(m.username);
+    av.textContent = (m.username[0] || "?").toUpperCase();
+    const b = document.createElement("div"); b.className = "bubble";
+    const n = document.createElement("div"); n.className = "name"; n.style.color = colorOf(m.username); n.textContent = "@" + m.username;
+    const t = document.createElement("span"); t.className = "time"; t.textContent = fmt(m.created_at);
+    b.append(n, document.createTextNode(m.content), t);
+    row.append(av, b); list.appendChild(row);
+  });
+  if (stick) toBottom(); else down.style.display = "block";
+  first = false;
+}
+
+// ---- Backend 1: Supabase (dipakai di Netlify / CodePen) ----
+const supa = {
+  name: "Supabase",
+  async refresh() {
+    try {
+      const r = await fetch(API + "?select=*&order=created_at.desc&limit=100", { headers: H });
+      if (!r.ok) throw new Error();
+      render((await r.json()).reverse()); setOnline(true);
+    } catch (e) { setOnline(false); }
+  },
+  start() { this.refresh(); setInterval(() => this.refresh(), 2000); },
+  async send(u, c) {
+    const r = await fetch(API, { method: "POST", headers: { ...H, Prefer: "return=minimal" }, body: JSON.stringify({ username: u, content: c }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.message || "Gagal kirim"); }
+  }
+};
+
+// ---- Backend 2: db bawaan Claude (dipakai saat dibuka di Claude) ----
+async function makeClaudeDb() {
+  if (!window.claude || !window.claude.use) return null;
+  let db = null;
+  try { db = await window.claude.use("db"); } catch (e) {}
+  if (!db) return null;
+  const col = db.collection("pesan");
+  return {
+    name: "Claude",
+    start() {
+      col.orderBy("t", "desc").limit(100).onSnapshot(
+        snap => { render(snap.docs.map(d => { const x = d.data() || {}; return { id: d.id, username: String(x.username || "?"), content: String(x.content || ""), created_at: x.t }; }).reverse()); setOnline(true); },
+        e => setOnline(false, "Login ke claude.ai dulu untuk memakai chat ini.")
+      );
+    },
+    async send(u, c) {
+      try { await col.add({ username: u, content: c, t: Date.now() }); }
+      catch (e) { throw new Error("Tidak bisa kirim di sini (perlu akses tulis)."); }
+    }
+  };
+}
+
+let backend = null;
+input.addEventListener("input", () => { $("cnt").textContent = input.value.length + "/300"; });
+
+let timer;
+function startCooldown() {
+  let s = COOLDOWN; btn.disabled = true; btn.textContent = s;
+  clearInterval(timer);
+  timer = setInterval(() => { s--; if (s <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = "Kirim"; } else btn.textContent = s; }, 1000);
+}
+
+$("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const content = input.value.trim();
+  if (!content || btn.disabled || !backend || !username) return;
+  toast.textContent = "";
+  btn.disabled = true;
+  try {
+    await backend.send(username, content);
+    input.value = ""; $("cnt").textContent = "0/300";
+    if (backend.refresh) await backend.refresh();
+    toBottom();
+  } catch (e2) { toast.textContent = e2.message; }
+  startCooldown();
+});
+
+askName(false);
+(async () => {
+  backend = (await makeClaudeDb()) || supa;
+  $("dot").title = "Terhubung via " + backend.name;
+  backend.start();
+})();
+</script>
+</body>
+</html>
